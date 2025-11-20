@@ -1,5 +1,5 @@
 ====================================================
-L10: Exercises
+Lecture Exercises
 ====================================================
 
 This page contains five exercises that reinforce the concepts introduced
