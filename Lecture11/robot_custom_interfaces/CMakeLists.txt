@@ -13,6 +13,8 @@ find_package(rosidl_default_generators REQUIRED)
 # Generate custom interfaces
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/RobotStatus.msg"
+  "srv/SetGoal.srv"
+  "action/NavigateToPose.action"
   DEPENDENCIES std_msgs
 )
 
