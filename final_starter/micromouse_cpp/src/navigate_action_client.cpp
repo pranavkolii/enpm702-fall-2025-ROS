@@ -216,6 +216,4 @@ int main(int argc, char* argv[]) {
 
   // Spin to process callbacks
   rclcpp::spin(node);
-
-  return 0;
 }
