@@ -1,0 +1,114 @@
+/**
+ * @file get_status_client.cpp
+ * @brief Implementation of Service Client for Robot Status
+ *
+ * Complete the TODOs to implement the service client
+ *
+ * This file demonstrates how to:
+ * - Create a ROS2 service client
+ * - Wait for a service to become available
+ * - Send asynchronous service requests
+ * - Handle service responses with callbacks
+ *
+ * Point values are shown in each TODO comment.
+ */
+
+#include "micromouse_cpp/get_status_client.hpp"
+
+using namespace std::chrono_literals;
+using std::placeholders::_1;
+
+namespace micromouse {
+
+// =============================================================================
+// Constructor
+// =============================================================================
+
+GetStatusClient::GetStatusClient() : Node("get_status_client") {
+  // =========================================================================
+  // TODO 1 (5 points): Create service client
+  // =========================================================================
+  // Create a service client for GetRobotStatus on "/get_robot_status"
+  // Store in client_ member variable.
+  //
+  // Hint: Use this->create_client<ServiceType>("service_name")
+  // =========================================================================
+  // YOUR CODE HERE
+
+  RCLCPP_INFO(this->get_logger(),
+              "Service client created for /get_robot_status");
+}
+
+// =============================================================================
+// send_request
+// =============================================================================
+
+void GetStatusClient::send_request() {
+  // Wait for service to be available
+  RCLCPP_INFO(this->get_logger(), "Waiting for service...");
+
+  if (!client_->wait_for_service(5s)) {
+    RCLCPP_WARN(this->get_logger(),
+                "Service /get_robot_status not available after 5 seconds");
+    RCLCPP_WARN(this->get_logger(),
+                "Make sure micromouse_node is running in MMS simulator");
+    rclcpp::shutdown();
+    return;
+  }
+
+  RCLCPP_INFO(this->get_logger(), "Service available, sending request...");
+
+  // =========================================================================
+  // TODO 2 (5 points): Create and send service request
+  // =========================================================================
+  // 1. Create an empty request: std::make_shared<GetRobotStatus::Request>()
+  // 2. Send the request asynchronously with callback:
+  //    client_->async_send_request(request, callback)
+  //    where callback is bound to response_callback method
+  //
+  // Hint: Use std::bind(&GetStatusClient::response_callback, this, _1)
+  // =========================================================================
+  // YOUR CODE HERE
+}
+
+// =============================================================================
+// response_callback
+// =============================================================================
+
+void GetStatusClient::response_callback(
+    rclcpp::Client<GetRobotStatus>::SharedFuture future) {
+  // =========================================================================
+  // TODO 3 (5 points): Handle service response
+  // =========================================================================
+  // 1. Get the response from the future: future.get()
+  // 2. Log all 9 response fields using RCLCPP_INFO:
+  //    - position_x, position_y
+  //    - direction (string)
+  //    - steps_taken
+  //    - steps_to_goal_estimate
+  //    - elapsed_seconds
+  //    - is_running (bool -> "true"/"false")
+  //    - success (bool -> "true"/"false")
+  //    - message (string)
+  // 3. Call rclcpp::shutdown() to exit
+  // =========================================================================
+  // YOUR CODE HERE
+}
+
+}  // namespace micromouse
+
+// =============================================================================
+// Main
+// =============================================================================
+
+int main(int argc, char* argv[]) {
+  rclcpp::init(argc, argv);
+
+  auto node = std::make_shared<micromouse::GetStatusClient>();
+
+  // Send request after node is initialized
+  node->send_request();
+
+  // Spin to process callback
+  rclcpp::spin(node);
+}

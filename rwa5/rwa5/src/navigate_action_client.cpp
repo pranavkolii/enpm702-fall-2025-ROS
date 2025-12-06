@@ -1,0 +1,219 @@
+/**
+ * @file navigate_action_client.cpp
+ * @brief Implementation of Action Client for MicroMouse Navigation
+ *
+ * Complete the TODOs to implement the action client
+ *
+ * This file demonstrates how to:
+ * - Create a ROS2 action client
+ * - Send goals to an action server
+ * - Handle feedback, results, and cancellation
+ *
+ * Point values are shown in each TODO comment.
+ */
+
+#include "micromouse_cpp/navigate_action_client.hpp"
+
+#include <csignal>
+
+using namespace std::chrono_literals;
+
+namespace micromouse {
+
+// =============================================================================
+// Global for signal handler (PROVIDED)
+// =============================================================================
+// Signal handlers cannot be member functions, so we need a global pointer
+// to the client instance to forward the cancel request.
+
+NavigateActionClient* g_client_instance = nullptr;
+
+/**
+ * @brief Signal handler for SIGINT (Ctrl+C) (PROVIDED)
+ *
+ * When Ctrl+C is pressed, this handler forwards the cancel request
+ * to the action client instead of immediately terminating the process.
+ */
+void signal_handler(int signum) {
+  (void)signum;  // Suppress unused parameter warning
+  if (g_client_instance) {
+    g_client_instance->cancel_goal();
+  }
+}
+
+// =============================================================================
+// Constructor (PROVIDED)
+// =============================================================================
+
+NavigateActionClient::NavigateActionClient() : Node("navigate_action_client") {
+  // Declare parameters
+  this->declare_parameter("goal_x", 7);
+  this->declare_parameter("goal_y", 7);
+
+  // Create action client
+  action_client_ =
+      rclcpp_action::create_client<NavigateToGoal>(this, "/navigate_to_goal");
+
+  // Set up signal handler for Ctrl+C cancellation
+  g_client_instance = this;
+  std::signal(SIGINT, signal_handler);
+
+  RCLCPP_INFO(this->get_logger(),
+              "Action client created for /navigate_to_goal");
+}
+
+// =============================================================================
+// send_goal
+// =============================================================================
+
+void NavigateActionClient::send_goal() {
+  // Wait for action server
+  if (!action_client_->wait_for_action_server(10s)) {
+    RCLCPP_ERROR(this->get_logger(),
+                 "Action server /navigate_to_goal not available after 10s");
+    rclcpp::shutdown();
+    return;
+  }
+
+  // -------------------------------------------------------------------------
+  // TODO 1 (5 points): Create goal message and set goal coordinates
+  // -------------------------------------------------------------------------
+  // Create a NavigateToGoal::Goal() object and set its goal_x and goal_y
+  // fields from the node's parameters.
+  //
+  // Hint: Use this->get_parameter("goal_x").as_int() to get parameter values
+  // -------------------------------------------------------------------------
+  auto goal_msg = NavigateToGoal::Goal();
+  // YOUR CODE HERE
+
+  RCLCPP_INFO(this->get_logger(), "Sending goal: navigate to (%d, %d)",
+              goal_msg.goal_x, goal_msg.goal_y);
+
+  // -------------------------------------------------------------------------
+  // TODO 2 (10 points): Set up goal options with callbacks
+  // -------------------------------------------------------------------------
+  // Create SendGoalOptions and bind the three callbacks:
+  //   - goal_response_callback
+  //   - feedback_callback
+  //   - result_callback
+  //
+  // Use std::bind with appropriate placeholders:
+  //   - goal_response_callback takes 1 placeholder
+  //   - feedback_callback takes 2 placeholders
+  //   - result_callback takes 1 placeholder
+  // -------------------------------------------------------------------------
+  auto send_goal_options =
+      rclcpp_action::Client<NavigateToGoal>::SendGoalOptions();
+  // YOUR CODE HERE
+
+  // Send the goal
+  action_client_->async_send_goal(goal_msg, send_goal_options);
+}
+
+// =============================================================================
+// cancel_goal (PROVIDED)
+// =============================================================================
+
+void NavigateActionClient::cancel_goal() {
+  if (goal_handle_) {
+    RCLCPP_INFO(this->get_logger(), "Cancelling goal...");
+    action_client_->async_cancel_goal(goal_handle_);
+  } else {
+    RCLCPP_WARN(this->get_logger(), "No active goal to cancel");
+    rclcpp::shutdown();
+  }
+}
+
+// =============================================================================
+// goal_response_callback
+// =============================================================================
+
+void NavigateActionClient::goal_response_callback(
+    const GoalHandleNavigate::SharedPtr& goal_handle) {
+  // -------------------------------------------------------------------------
+  // TODO 3 (5 points): Handle goal acceptance/rejection
+  // -------------------------------------------------------------------------
+  // 1. Check if goal_handle is null (goal rejected)
+  //    - If null: log error and call rclcpp::shutdown(), then return
+  // 2. Store goal_handle in goal_handle_ member for cancellation support
+  // 3. Log that goal was accepted
+  // -------------------------------------------------------------------------
+  // YOUR CODE HERE
+
+  RCLCPP_INFO(this->get_logger(), "Press Ctrl+C to cancel navigation");
+}
+
+// =============================================================================
+// feedback_callback
+// =============================================================================
+
+void NavigateActionClient::feedback_callback(
+    GoalHandleNavigate::SharedPtr /*goal_handle*/,
+    const std::shared_ptr<const NavigateToGoal::Feedback> feedback) {
+  // -------------------------------------------------------------------------
+  // TODO 4 (5 points): Log feedback information
+  // -------------------------------------------------------------------------
+  // Use RCLCPP_INFO to log the feedback fields:
+  //   - current_x, current_y (position)
+  //   - direction
+  //   - elapsed_seconds
+  //
+  // Format: "Feedback - Position: (%d, %d), Direction: %d, Elapsed: %.2fs"
+  // -------------------------------------------------------------------------
+  // YOUR CODE HERE
+}
+
+// =============================================================================
+// result_callback
+// =============================================================================
+
+void NavigateActionClient::result_callback(
+    const GoalHandleNavigate::WrappedResult& result) {
+  // Clear goal handle since navigation is complete
+  goal_handle_ = nullptr;
+
+  switch (result.code) {
+    case rclcpp_action::ResultCode::SUCCEEDED:
+      RCLCPP_INFO(this->get_logger(), "=== NAVIGATION SUCCEEDED ===");
+      break;
+    case rclcpp_action::ResultCode::ABORTED:
+      RCLCPP_ERROR(this->get_logger(), "=== NAVIGATION ABORTED ===");
+      break;
+    case rclcpp_action::ResultCode::CANCELED:
+      RCLCPP_WARN(this->get_logger(), "=== NAVIGATION CANCELED ===");
+      break;
+    default:
+      RCLCPP_ERROR(this->get_logger(), "=== UNKNOWN RESULT ===");
+      break;
+  }
+
+  RCLCPP_INFO(this->get_logger(), "Result:");
+  RCLCPP_INFO(this->get_logger(), "  Success: %s",
+              result.result->success ? "true" : "false");
+  RCLCPP_INFO(this->get_logger(), "  Total steps: %d",
+              result.result->total_steps);
+  RCLCPP_INFO(this->get_logger(), "  Total time: %.2fs",
+              result.result->total_time);
+  RCLCPP_INFO(this->get_logger(), "  Message: %s",
+              result.result->message.c_str());
+
+  rclcpp::shutdown();
+}
+
+}  // namespace micromouse
+
+// =============================================================================
+// Main
+// =============================================================================
+
+int main(int argc, char* argv[]) {
+  rclcpp::init(argc, argv);
+
+  auto node = std::make_shared<micromouse::NavigateActionClient>();
+
+  // Send goal after node is initialized
+  node->send_goal();
+
+  // Spin to process callbacks
+  rclcpp::spin(node);
+}
