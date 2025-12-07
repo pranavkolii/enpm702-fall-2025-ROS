@@ -69,6 +69,18 @@ class MicroMouseNode : public rclcpp::Node {
     // For string parameters, get the first character: .as_string()[0]
     // =====================================================================
     // YOUR CODE HERE
+    this->declare_parameter("goal_x", rclcpp::ParameterValue(7));
+    this->declare_parameter("goal_y", rclcpp::ParameterValue(7));
+    this->declare_parameter("path_color", rclcpp::ParameterValue("c"));
+    this->declare_parameter("goal_color", rclcpp::ParameterValue("g"));
+    this->declare_parameter("standalone_mode", rclcpp::ParameterValue(true));
+
+    // Retrieve
+    goal_x_ = this->get_parameter("goal_x").as_int();
+    goal_y_ = this->get_parameter("goal_y").as_int();
+    path_color_ = this->get_parameter("path_color").as_string()[0];
+    goal_color_ = this->get_parameter("goal_color").as_string()[0];
+    standalone_mode_ = this->get_parameter("standalone_mode").as_bool();
 
     // =====================================================================
     // TODO 2 (5 points): Create publisher for robot position
@@ -77,6 +89,8 @@ class MicroMouseNode : public rclcpp::Node {
     // "/robot_position" with a queue size of 10. Store in robot_position_pub_.
     // =====================================================================
     // YOUR CODE HERE
+    robot_position_pub_ = this->create_publisher<geometry_msgs::msg::Point>(
+      "/robot_position", 10);
 
     // =====================================================================
     // TODO 3 (5 points): Create service server for robot status
@@ -86,6 +100,10 @@ class MicroMouseNode : public rclcpp::Node {
     // Store in status_srv_.
     // =====================================================================
     // YOUR CODE HERE
+    status_srv_ = this->create_service<GetRobotStatus>(
+      "/get_robot_status",
+      std::bind(&MicroMouseNode::get_status_callback, this,
+                std::placeholders::_1, std::placeholders::_2));
 
     // =====================================================================
     // TODO 4 (10 points): Create action server for navigation
@@ -98,6 +116,12 @@ class MicroMouseNode : public rclcpp::Node {
     // Store in action_server_.
     // =====================================================================
     // YOUR CODE HERE
+    action_server_ = rclcpp_action::create_server<NavigateToGoal>(
+      this, "/navigate_to_goal",
+      std::bind(&MicroMouseNode::handle_goal, this, std::placeholders::_1,
+                std::placeholders::_2),
+      std::bind(&MicroMouseNode::handle_cancel, this, std::placeholders::_1),
+      std::bind(&MicroMouseNode::handle_accepted, this, std::placeholders::_1));
 
     log("Action server ready: /navigate_to_goal");
   }
@@ -331,7 +355,54 @@ class MicroMouseNode : public rclcpp::Node {
     // then reverse the path.
     // =====================================================================
     // YOUR CODE HERE
+    using Path = std::vector<Cell>;
 
+  // 1. Create a stack (vector for LIFO) and 2. visited set (using map for parent tracking)
+  std::vector<Cell> stack;
+  std::map<Cell, Cell> parent; // Also acts as the visited set
+  
+  // 4. Push start onto stack, set parent[start] = start
+  stack.push_back(start);
+  parent[start] = start;
+
+  while (!stack.empty()) {
+    // a. Pop current cell from stack
+    Cell current = stack.back();
+    stack.pop_back();
+
+    // d. If current == goal, reconstruct and return path
+    if (current == goal) {
+      Path path;
+      Cell backtrack_cell = goal;
+      while (!(backtrack_cell == start)) {
+        path.push_back(backtrack_cell);
+        backtrack_cell = parent.at(backtrack_cell);
+      }
+      path.push_back(start);
+      std::reverse(path.begin(), path.end());
+      return path;
+    }
+
+    // e. For each neighbor (N, E, S, W order):
+    for (Dir dir : {Dir::North, Dir::East, Dir::South, Dir::West}) {
+      Cell neighbor{current.x + dx(dir), current.y + dy(dir)};
+
+      // Skip if out of bounds OR wall blocks edge (use edge_free())
+      if (!in_bounds(neighbor) || !edge_free(current, dir)) {
+        continue;
+      }
+
+      // If not visited
+      if (parent.find(neighbor) == parent.end()) {
+        // Set parent
+        parent[neighbor] = current;
+        // Push onto stack
+        stack.push_back(neighbor);
+      }
+    }
+  }
+
+  // 6. Return std::nullopt if no path found
     return std::nullopt;  // Replace with actual implementation
   }
 
@@ -583,6 +654,21 @@ class MicroMouseNode : public rclcpp::Node {
     // =====================================================================
     std::lock_guard<std::mutex> lock(state_mutex_);
     // YOUR CODE HERE
+    response->position_x = robot_.x;
+    response->position_y = robot_.y;
+    response->direction = dir_to_string(facing_);
+    response->steps_taken = steps_;
+    
+    // Manhattan distance to goal
+    response->steps_to_goal_estimate =
+        std::abs(goal_x_ - robot_.x) + std::abs(goal_y_ - robot_.y);
+
+    // elapsed_seconds: call get_elapsed_seconds() if running, else 0.0
+    response->elapsed_seconds = is_running_ ? get_elapsed_seconds() : 0.0;
+    
+    response->is_running = is_running_;
+    response->success = true; // Service call succeeded
+    response->message = is_running_ ? "Navigation active" : "Idle";
   }
 
   rclcpp_action::GoalResponse handle_goal(

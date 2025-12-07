@@ -85,6 +85,8 @@ void NavigateActionClient::send_goal() {
   // -------------------------------------------------------------------------
   auto goal_msg = NavigateToGoal::Goal();
   // YOUR CODE HERE
+  goal_msg.goal_x = this->get_parameter("goal_x").as_int();
+  goal_msg.goal_y = this->get_parameter("goal_y").as_int();
 
   RCLCPP_INFO(this->get_logger(), "Sending goal: navigate to (%d, %d)",
               goal_msg.goal_x, goal_msg.goal_y);
@@ -105,6 +107,20 @@ void NavigateActionClient::send_goal() {
   auto send_goal_options =
       rclcpp_action::Client<NavigateToGoal>::SendGoalOptions();
   // YOUR CODE HERE
+  // 1. Goal Response Callback
+  send_goal_options.goal_response_callback =
+      std::bind(&NavigateActionClient::goal_response_callback, this,
+                std::placeholders::_1);
+
+  // 2. Feedback Callback
+  send_goal_options.feedback_callback =
+      std::bind(&NavigateActionClient::feedback_callback, this,
+                std::placeholders::_1, std::placeholders::_2);
+
+  // 3. Result Callback
+  send_goal_options.result_callback =
+      std::bind(&NavigateActionClient::result_callback, this,
+                std::placeholders::_1);
 
   // Send the goal
   action_client_->async_send_goal(goal_msg, send_goal_options);
@@ -139,7 +155,16 @@ void NavigateActionClient::goal_response_callback(
   // 3. Log that goal was accepted
   // -------------------------------------------------------------------------
   // YOUR CODE HERE
+  if (!goal_handle) {
+    RCLCPP_ERROR(this->get_logger(), "Goal was rejected by server");
+    rclcpp::shutdown();
+    return;
+  }
 
+  // Store goal_handle for cancellation support
+  goal_handle_ = goal_handle;
+
+  RCLCPP_INFO(this->get_logger(), "Goal accepted by server");
   RCLCPP_INFO(this->get_logger(), "Press Ctrl+C to cancel navigation");
 }
 
@@ -161,6 +186,10 @@ void NavigateActionClient::feedback_callback(
   // Format: "Feedback - Position: (%d, %d), Direction: %d, Elapsed: %.2fs"
   // -------------------------------------------------------------------------
   // YOUR CODE HERE
+  RCLCPP_INFO(this->get_logger(),
+              "Feedback - Position: (%d, %d), Direction: %d, Elapsed: %.2fs",
+              feedback->current_x, feedback->current_y, feedback->direction,
+              feedback->elapsed_seconds);
 }
 
 // =============================================================================
